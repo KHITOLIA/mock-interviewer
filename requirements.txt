@@ -1,0 +1,6 @@
+streamlit==1.26.0
+scikit-learn==1.2.2
+numpy==1.25.0
+gTTS==2.3.2
+langchain-huggingface==0.0.19
+sentence-transformers==2.2.2
