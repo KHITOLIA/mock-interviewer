@@ -11,6 +11,18 @@ from gtts import gTTS
 import base64
 import tempfile
 import time
+from datetime import datetime
+
+
+# Hello, my name is Tushar Khitoliya, and I am an AI-ML Engineer. I completed my B.Tech in Electrical and Electronics Engineering from the National Institute of Technology, Delhi.
+
+# I have strong expertise in Python, machine learning, deep learning, NLP, and Generative AI tools like HuggingFace and LangChain vector databases and RAG frameworks . I have worked on projects including a Music Genre Classifier, Plant Disease Diagnosis system, and a medical chatbot using Retrieval-Augmented Generation.
+
+# Professionally, I have trained corporate teams on AI and ML at Blogic Software Technology and mentored students at Coding Blocks and served as an AI-ML trainer in Chitkara University, Punjab . 
+
+# I am passionate about building AI-driven solutions, solving real-world problems, and continuously learning. I would love to contribute my skills and grow with your organization. Thank you for your time.
+
+
 
 warnings.filterwarnings("ignore")
 
@@ -162,6 +174,9 @@ def login_page():
 # ---------------------------
 # Interview Page
 # ---------------------------
+# ---------------------------
+# Interview Page
+# ---------------------------
 def interview_page():
     st.title("📊 Excel AI Interviewer")
 
@@ -170,12 +185,14 @@ def interview_page():
         ans = excel_qna[q]["answer"]
         topic = excel_qna[q]["topic"]
 
-        # Show interviewer question with typing effect
-        st.subheader("🧑🏻‍💼 Interviewer:")
-        type_effect(q)
-        st.markdown(tts(q), unsafe_allow_html=True)
+        # Show interviewer question only once
+        if f"asked_{st.session_state.index}" not in st.session_state:
+            st.session_state[f"asked_{st.session_state.index}"] = True
+            st.subheader("🧑🏻‍💼 Interviewer:")
+            type_effect(q)
+            st.markdown(tts(q), unsafe_allow_html=True)
 
-        # Candidate input (always blank after rerun)
+        # Candidate input
         user_input = st.text_area("💬 Your Answer:", value="", key=f"input_{st.session_state.index}")
 
         if st.button("Submit Answer", key=f"btn_{st.session_state.index}"):
@@ -186,26 +203,21 @@ def interview_page():
                 ans_emb = embedding_model.embed_query(ans)
                 similarity = cosine_similarity([user_emb], [ans_emb])[0][0] * 100
 
-                # Feedback with typing effect
+                # Save correctness for final score (instead of showing now)
                 if similarity > 80:
                     feedback = random.choice(positive_response)
-                    type_effect("✅ " + feedback)
-                    st.markdown(tts(feedback), unsafe_allow_html=True)
-                    time.sleep(4)
-                    st.write(f"**Your Score:** {int(np.round(similarity))}")
+                    st.session_state.summary.append({"topic": topic, "correct": True})
                 else:
                     feedback = random.choice(negative_response)
-                    type_effect("❌ " + feedback)
-                    st.markdown(tts(feedback), unsafe_allow_html=True)
-                    time.sleep(4)
-                    st.session_state.summary.append(topic)
+                    st.session_state.summary.append({"topic": topic, "correct": False})
 
-                # Move to next question
+                # Show feedback only (no score here)
+                type_effect(feedback)
+                st.markdown(tts(feedback), unsafe_allow_html=True)
+                time.sleep(3)
+
+                # Next question
                 st.session_state.index += 1
-                if st.session_state.index < len(questions):
-                    next_q = questions[st.session_state.index]
-                    st.markdown(tts("Next Question: " + next_q), unsafe_allow_html=True)
-
                 st.rerun()
 
     else:
@@ -213,24 +225,44 @@ def interview_page():
         st.subheader("📌 Interview Summary")
         st.balloons()
 
-        if st.session_state.summary:
+        incorrect_topics = [s["topic"] for s in st.session_state.summary if not s["correct"]]
+
+        if incorrect_topics:
             st.error("You should focus more on these topics:")
-            for t in set(st.session_state.summary):
+            for t in set(incorrect_topics):
                 st.write(f"- {t}")
-            st.markdown(tts("You should focus more on " + ", ".join(set(st.session_state.summary))), unsafe_allow_html=True)
-            sleep(5)  # wait for summary voice
+            st.markdown(tts("You should focus more on " + ", ".join(set(incorrect_topics))), unsafe_allow_html=True)
+            sleep(5)
         else:
             st.success("🎉 Great job! You performed well in all topics.")
             st.markdown(tts("Great job! You performed well in all topics."), unsafe_allow_html=True)
-            sleep(5)  # wait for summary voice
+            sleep(5)
 
-        # Final score voice
-        final_score = len(questions) - len(st.session_state.summary)
-        percent = int((final_score / len(questions)) * 100)
+        # Final score
+        correct_count = sum(1 for s in st.session_state.summary if s["correct"])
+        percent = int((correct_count / len(questions)) * 100)
+        st.success(f"🏆 Your final score: {percent}%")
         st.markdown(tts(f"Your final score is {percent} percent."), unsafe_allow_html=True)
         sleep(5)
+        
+        # Final score
+        correct_count = sum(1 for s in st.session_state.summary if s["correct"])
+        percent = int((correct_count / len(questions)) * 100)
 
-        # Reset session and go back to login
+        # Save result to users.json
+        users = load_users()
+        username = st.session_state.username
+        if "results" not in users[username]:
+            users[username]["results"] = []
+
+        users[username]["results"].append({
+            "score": percent,
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "weak_topics": list(set([s["topic"] for s in st.session_state.summary if not s["correct"]]))
+        })
+        save_users(users)
+
+        # Reset session
         st.session_state.authenticated = False
         st.session_state.username = None
         st.session_state.index = 0
